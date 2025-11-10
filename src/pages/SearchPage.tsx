@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { searchFoods, createFood, getFoodWithNutrients } from '../db/foodRepository';
 import { getRecentFoods } from '../db/entryRepository';
 import { getFavoriteFoods, addFavorite, removeFavoriteByFoodId, isFavorite } from '../db/favoritesRepository';
@@ -12,9 +12,11 @@ type Source = 'local' | 'off' | 'fdc';
 
 export function SearchPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const mealParam = searchParams.get('meal');
   const [activeTab, setActiveTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
-  const [source, setSource] = useState<Source>('local');
+  const [source, setSource] = useState<Source>('off'); // Default to Open Food Facts for better UX
   const [results, setResults] = useState<FoodWithNutrients[]>([]);
   const [favorites, setFavorites] = useState<FoodWithNutrients[]>([]);
   const [recentFoods, setRecentFoods] = useState<FoodWithNutrients[]>([]);
@@ -86,6 +88,7 @@ export function SearchPage() {
 
   async function handleFoodClick(food: FoodWithNutrients) {
     // If from remote source, save to local DB first
+    let foodId = food.id;
     if ((food.source === 'OFF' || food.source === 'FDC') && !food.id.match(/^[0-9a-f]{8}-/)) {
       const saved = await createFood(
         {
@@ -99,10 +102,12 @@ export function SearchPage() {
         },
         food.nutrients
       );
-      navigate(`/food/${saved.id}`);
-    } else {
-      navigate(`/food/${food.id}`);
+      foodId = saved.id;
     }
+
+    // Navigate to food detail, preserving meal parameter if present
+    const url = mealParam ? `/food/${foodId}?meal=${mealParam}` : `/food/${foodId}`;
+    navigate(url);
   }
 
   async function toggleFavorite(food: FoodWithNutrients, e: React.MouseEvent) {

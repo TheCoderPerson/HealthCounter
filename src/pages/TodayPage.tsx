@@ -77,7 +77,7 @@ export function TodayPage() {
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-semibold capitalize">{meal}</h3>
               <Link
-                to={`/add?meal=${meal}`}
+                to={`/search?meal=${meal}`}
                 className="text-blue-600 hover:text-blue-700 text-sm font-medium"
               >
                 + Add
