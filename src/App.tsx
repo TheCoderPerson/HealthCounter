@@ -6,6 +6,7 @@ import { TodayPage } from './pages/TodayPage';
 import { SearchPage } from './pages/SearchPage';
 import { ScanPage } from './pages/ScanPage';
 import { RecipesPage } from './pages/RecipesPage';
+import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { ManualFoodPage } from './pages/ManualFoodPage';
 import { FoodDetailPage } from './pages/FoodDetailPage';
 
@@ -22,6 +23,7 @@ function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/scan" element={<ScanPage />} />
           <Route path="/recipes" element={<RecipesPage />} />
+          <Route path="/recipes/:id" element={<RecipeDetailPage />} />
           <Route path="/manual" element={<ManualFoodPage />} />
           <Route path="/food/:id" element={<FoodDetailPage />} />
         </Routes>
