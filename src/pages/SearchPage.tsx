@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { searchFoods, createFood, getFoodWithNutrients } from '../db/foodRepository';
+import { searchFoods, createFood, getFoodWithNutrients, getFoodBySourceKey } from '../db/foodRepository';
 import { getRecentFoods } from '../db/entryRepository';
 import { getFavoriteFoods, addFavorite, removeFavoriteByFoodId, isFavorite } from '../db/favoritesRepository';
 import { searchOFF } from '../api/openFoodFacts';
@@ -87,40 +87,20 @@ export function SearchPage() {
   }
 
   async function handleFoodClick(food: FoodWithNutrients) {
-    // If from remote source, save to local DB first
     let foodId = food.id;
-    if ((food.source === 'OFF' || food.source === 'FDC') && !food.id.match(/^[0-9a-f]{8}-/)) {
-      const saved = await createFood(
-        {
-          name: food.name,
-          brand: food.brand,
-          source: food.source,
-          source_key: food.source_key,
-          state: food.state,
-          grams_per_serving: food.grams_per_serving,
-          confidence: food.confidence,
-        },
-        food.nutrients
-      );
-      foodId = saved.id;
-    }
 
-    // Navigate to food detail, preserving meal parameter if present
-    const url = mealParam ? `/food/${foodId}?meal=${mealParam}` : `/food/${foodId}`;
-    navigate(url);
-  }
+    // If from remote source (OFF/FDC), check if already in local DB
+    if (food.source === 'OFF' || food.source === 'FDC') {
+      // Check if we already have this food cached locally
+      const existingFood = food.source_key
+        ? await getFoodBySourceKey(food.source, food.source_key)
+        : null;
 
-  async function toggleFavorite(food: FoodWithNutrients, e: React.MouseEvent) {
-    e.stopPropagation();
-
-    const isCurrentlyFavorite = await isFavorite(food.id);
-
-    if (isCurrentlyFavorite) {
-      await removeFavoriteByFoodId(food.id);
-    } else {
-      // Ensure the food is saved locally first
-      let foodId = food.id;
-      if ((food.source === 'OFF' || food.source === 'FDC') && !food.id.match(/^[0-9a-f]{8}-/)) {
+      if (existingFood) {
+        // Use the existing local food's ID
+        foodId = existingFood.id;
+      } else {
+        // Save to local DB and use new ID
         const saved = await createFood(
           {
             name: food.name,
@@ -135,6 +115,48 @@ export function SearchPage() {
         );
         foodId = saved.id;
       }
+    }
+
+    // Navigate to food detail, preserving meal parameter if present
+    const url = mealParam ? `/food/${foodId}?meal=${mealParam}` : `/food/${foodId}`;
+    navigate(url);
+  }
+
+  async function toggleFavorite(food: FoodWithNutrients, e: React.MouseEvent) {
+    e.stopPropagation();
+
+    let foodId = food.id;
+
+    // If from remote source (OFF/FDC), ensure it's saved locally first
+    if (food.source === 'OFF' || food.source === 'FDC') {
+      const existingFood = food.source_key
+        ? await getFoodBySourceKey(food.source, food.source_key)
+        : null;
+
+      if (existingFood) {
+        foodId = existingFood.id;
+      } else {
+        const saved = await createFood(
+          {
+            name: food.name,
+            brand: food.brand,
+            source: food.source,
+            source_key: food.source_key,
+            state: food.state,
+            grams_per_serving: food.grams_per_serving,
+            confidence: food.confidence,
+          },
+          food.nutrients
+        );
+        foodId = saved.id;
+      }
+    }
+
+    const isCurrentlyFavorite = await isFavorite(foodId);
+
+    if (isCurrentlyFavorite) {
+      await removeFavoriteByFoodId(foodId);
+    } else {
       await addFavorite(foodId);
     }
 
