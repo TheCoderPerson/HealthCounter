@@ -42,14 +42,21 @@ export async function initializeDatabase() {
   const settingsCount = await db.settings.count();
 
   if (settingsCount === 0) {
-    await db.settings.add({
-      id: 'default',
-      goals: {
-        kcal: 2000,
-        protein_g: 150,
-      },
-      units: 'metric',
-      theme: 'auto',
-    });
+    try {
+      await db.settings.add({
+        id: 'default',
+        goals: {
+          kcal: 2000,
+          protein_g: 150,
+        },
+        units: 'metric',
+        theme: 'auto',
+      });
+    } catch (error: unknown) {
+      // Ignore if key already exists (can happen due to React StrictMode double-calling in dev)
+      if (error && typeof error === 'object' && 'name' in error && error.name !== 'ConstraintError') {
+        throw error;
+      }
+    }
   }
 }
