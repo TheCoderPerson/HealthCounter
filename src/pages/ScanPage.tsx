@@ -65,7 +65,7 @@ export function ScanPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-lg">Looking up product...</p>
@@ -76,7 +76,7 @@ export function ScanPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow p-6 text-center">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h2 className="text-xl font-bold mb-2">Error</h2>
@@ -103,7 +103,7 @@ export function ScanPage() {
 
   if (!scanning) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow p-6 text-center">
           <div className="text-6xl mb-4">📷</div>
           <h1 className="text-2xl font-bold mb-2">Scan Barcode</h1>
@@ -128,8 +128,18 @@ export function ScanPage() {
   }
 
   return (
-    <div className="h-screen w-screen">
+    <div className="h-screen w-screen relative">
       <BarcodeScanner onScan={handleScan} onError={handleError} />
+      {/* Close button overlay */}
+      <button
+        onClick={() => {
+          setScanning(false);
+          navigate('/');
+        }}
+        className="absolute top-4 left-4 bg-white/90 text-gray-800 px-4 py-2 rounded-lg font-semibold shadow-lg hover:bg-white z-50"
+      >
+        ✕ Close
+      </button>
     </div>
   );
 }

@@ -63,7 +63,7 @@ export function FoodDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center">
         <div className="text-lg">Loading...</div>
       </div>
     );
@@ -71,7 +71,7 @@ export function FoodDetailPage() {
 
   if (!food) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center">
         <div className="text-center">
           <p className="text-lg mb-4">Food not found</p>
           <button
