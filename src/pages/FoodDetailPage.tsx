@@ -122,7 +122,7 @@ export function FoodDetailPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pb-48">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="bg-white border-b p-4">
@@ -179,7 +179,14 @@ export function FoodDetailPage() {
             {quickAddAmounts.map((qa) => (
               <button
                 key={qa.label}
-                onClick={() => setAmount({ value: qa.value, unit: qa.unit })}
+                onClick={() => {
+                  // Add to current amount if units match, otherwise set
+                  if (amount.unit === qa.unit) {
+                    setAmount({ value: amount.value + qa.value, unit: qa.unit });
+                  } else {
+                    setAmount({ value: qa.value, unit: qa.unit });
+                  }
+                }}
                 className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
               >
                 {qa.label}
@@ -278,7 +285,7 @@ export function FoodDetailPage() {
       </div>
 
       {/* Fixed bottom add button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-lg">
+      <div className="fixed bottom-16 left-0 right-0 bg-white border-t p-4 shadow-lg z-40">
         <div className="max-w-2xl mx-auto">
           <div className="flex gap-2 mb-3">
             <select
