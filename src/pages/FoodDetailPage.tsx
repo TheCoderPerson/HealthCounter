@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getFoodWithNutrients } from '../db/foodRepository';
 import { createEntry } from '../db/entryRepository';
-import { toGrams, getAvailableUnits, formatUnit } from '../domain/units';
+import { toGrams, gramsTo, getAvailableUnits, formatUnit } from '../domain/units';
 import { calculateNutrients, formatNutrientValue } from '../domain/nutrition';
 import type { FoodWithNutrients, MealType, UnitType, Amount } from '../types';
 import { NUTRIENT_LABELS, NUTRIENT_UNITS } from '../types/nutrients';
@@ -30,9 +30,9 @@ export function FoodDetailPage() {
     setFood(foodData);
     setLoading(false);
 
-    // Set default amount to serving if available
+    // Set default amount to serving size if available
     if (foodData?.grams_per_serving) {
-      setAmount({ value: 1, unit: 'serving' });
+      setAmount({ value: foodData.grams_per_serving, unit: 'g' });
     }
   }
 
@@ -48,18 +48,102 @@ export function FoodDetailPage() {
     }
   };
 
-  const quickAddAmounts = [
-    { label: '+25g', value: 25, unit: 'g' as UnitType },
-    { label: '+50g', value: 50, unit: 'g' as UnitType },
-    { label: '+100g', value: 100, unit: 'g' as UnitType },
-  ];
+  const handleUnitChange = (newUnit: UnitType) => {
+    if (!food) return;
 
-  if (food?.grams_per_serving) {
-    quickAddAmounts.unshift(
-      { label: '+½ serving', value: 0.5, unit: 'serving' as UnitType },
-      { label: '+1 serving', value: 1, unit: 'serving' as UnitType }
-    );
-  }
+    try {
+      // Convert current amount to grams
+      const grams = toGrams(amount, food);
+      // Convert grams to new unit
+      const newValue = gramsTo(grams, newUnit, food);
+      // Update amount with converted value
+      setAmount({ value: parseFloat(newValue.toFixed(2)), unit: newUnit });
+    } catch (error) {
+      // If conversion fails (e.g., no serving size defined), just change unit
+      console.warn('Unit conversion error:', error);
+      setAmount({ ...amount, unit: newUnit });
+    }
+  };
+
+  // Generate quick add/subtract buttons based on current unit
+  const getQuickButtons = () => {
+    const currentUnit = amount.unit;
+
+    switch (currentUnit) {
+      case 'g':
+        return [
+          { label: '-50', value: -50 },
+          { label: '-25', value: -25 },
+          { label: '+25', value: 25 },
+          { label: '+50', value: 50 },
+          { label: '+100', value: 100 },
+        ];
+      case 'oz':
+        return [
+          { label: '-1', value: -1 },
+          { label: '-0.5', value: -0.5 },
+          { label: '+0.5', value: 0.5 },
+          { label: '+1', value: 1 },
+          { label: '+2', value: 2 },
+        ];
+      case 'ml':
+        return [
+          { label: '-50', value: -50 },
+          { label: '-25', value: -25 },
+          { label: '+25', value: 25 },
+          { label: '+50', value: 50 },
+          { label: '+100', value: 100 },
+        ];
+      case 'cup':
+        return [
+          { label: '-0.5', value: -0.5 },
+          { label: '-0.25', value: -0.25 },
+          { label: '+0.25', value: 0.25 },
+          { label: '+0.5', value: 0.5 },
+          { label: '+1', value: 1 },
+        ];
+      case 'tbsp':
+        return [
+          { label: '-2', value: -2 },
+          { label: '-1', value: -1 },
+          { label: '+1', value: 1 },
+          { label: '+2', value: 2 },
+          { label: '+4', value: 4 },
+        ];
+      case 'tsp':
+        return [
+          { label: '-2', value: -2 },
+          { label: '-1', value: -1 },
+          { label: '+1', value: 1 },
+          { label: '+2', value: 2 },
+          { label: '+3', value: 3 },
+        ];
+      case 'serving':
+        return [
+          { label: '-1', value: -1 },
+          { label: '-0.5', value: -0.5 },
+          { label: '+0.5', value: 0.5 },
+          { label: '+1', value: 1 },
+          { label: '+2', value: 2 },
+        ];
+      case 'piece':
+        return [
+          { label: '-2', value: -2 },
+          { label: '-1', value: -1 },
+          { label: '+1', value: 1 },
+          { label: '+2', value: 2 },
+          { label: '+3', value: 3 },
+        ];
+      default:
+        return [
+          { label: '-1', value: -1 },
+          { label: '+1', value: 1 },
+          { label: '+2', value: 2 },
+        ];
+    }
+  };
+
+  const quickButtons = getQuickButtons();
 
   if (loading) {
     return (
@@ -163,7 +247,7 @@ export function FoodDetailPage() {
             />
             <select
               value={amount.unit}
-              onChange={(e) => setAmount({ ...amount, unit: e.target.value as UnitType })}
+              onChange={(e) => handleUnitChange(e.target.value as UnitType)}
               className="px-3 py-2 border rounded-lg"
             >
               {availableUnits.map((unit) => (
@@ -174,24 +258,33 @@ export function FoodDetailPage() {
             </select>
           </div>
 
-          {/* Quick add buttons */}
+          {/* Quick add/subtract buttons */}
           <div className="flex gap-2 flex-wrap">
-            {quickAddAmounts.map((qa) => (
-              <button
-                key={qa.label}
-                onClick={() => {
-                  // Add to current amount if units match, otherwise set
-                  if (amount.unit === qa.unit) {
-                    setAmount({ value: amount.value + qa.value, unit: qa.unit });
-                  } else {
-                    setAmount({ value: qa.value, unit: qa.unit });
-                  }
-                }}
-                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
-              >
-                {qa.label}
-              </button>
-            ))}
+            {quickButtons.map((btn) => {
+              const isSubtract = btn.value < 0;
+              const newValue = amount.value + btn.value;
+              const isDisabled = newValue < 0;
+
+              return (
+                <button
+                  key={btn.label}
+                  onClick={() => {
+                    const updatedValue = Math.max(0, amount.value + btn.value);
+                    setAmount({ value: parseFloat(updatedValue.toFixed(2)), unit: amount.unit });
+                  }}
+                  disabled={isDisabled}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                    isDisabled
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : isSubtract
+                      ? 'bg-red-100 hover:bg-red-200 text-red-800'
+                      : 'bg-green-100 hover:bg-green-200 text-green-800'
+                  }`}
+                >
+                  {btn.label} {formatUnit(amount.unit, Math.abs(btn.value))}
+                </button>
+              );
+            })}
           </div>
 
           <p className="text-sm text-gray-600 mt-2">= {currentGrams.toFixed(1)}g</p>

@@ -11,6 +11,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const processingRef = useRef(false); // Prevent multiple scans
 
   useEffect(() => {
     // Initialize reader without hints (will scan all common formats)
@@ -25,6 +26,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     if (!videoRef.current || !readerRef.current) return;
 
     try {
+      processingRef.current = false; // Reset processing flag
       setIsScanning(true);
       setHasPermission(true);
 
@@ -46,12 +48,13 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         undefined, // Use default camera
         videoRef.current,
         (result, error) => {
-          if (result) {
+          if (result && !processingRef.current) {
+            processingRef.current = true; // Prevent multiple scans
             const barcode = result.getText();
             console.log('Barcode detected:', barcode);
-            onScan(barcode);
-            // Stop scanning after successful scan
+            // Stop scanning BEFORE calling onScan to prevent multiple detections
             stopScanning();
+            onScan(barcode);
           }
           // Ignore decode errors (they happen frequently while scanning)
           if (error && !(error.name === 'NotFoundException')) {
@@ -68,6 +71,19 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   };
 
   const stopScanning = () => {
+    // Stop the ZXing reader continuous decode loop
+    if (readerRef.current) {
+      try {
+        // TypeScript doesn't know about stopContinuousDecode, but it exists on the reader
+        const reader = readerRef.current as any;
+        if (typeof reader.stopContinuousDecode === 'function') {
+          reader.stopContinuousDecode();
+        }
+      } catch (err) {
+        console.error('Error stopping scanner:', err);
+      }
+    }
+
     // Stop the video stream
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;

@@ -3,12 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { searchFoods, createFood, getFoodWithNutrients, getFoodBySourceKey } from '../db/foodRepository';
 import { getRecentFoods } from '../db/entryRepository';
 import { getFavoriteFoods, addFavorite, removeFavoriteByFoodId, isFavorite } from '../db/favoritesRepository';
-import { searchOFF } from '../api/openFoodFacts';
+import { searchOFF, lookupBarcode } from '../api/openFoodFacts';
 import { searchFDC } from '../api/foodDataCentral';
 import type { FoodWithNutrients } from '../types';
 
+// Helper to detect if query is a barcode (numeric)
+function isBarcode(query: string): boolean {
+  return /^\d+$/.test(query.trim()) && query.trim().length >= 8;
+}
+
 type Tab = 'all' | 'favorites' | 'recent';
-type Source = 'local' | 'off' | 'fdc';
 
 export function SearchPage() {
   const navigate = useNavigate();
@@ -16,7 +20,6 @@ export function SearchPage() {
   const mealParam = searchParams.get('meal');
   const [activeTab, setActiveTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
-  const [source, setSource] = useState<Source>('off'); // Default to Open Food Facts for better UX
   const [results, setResults] = useState<FoodWithNutrients[]>([]);
   const [favorites, setFavorites] = useState<FoodWithNutrients[]>([]);
   const [recentFoods, setRecentFoods] = useState<FoodWithNutrients[]>([]);
@@ -29,17 +32,39 @@ export function SearchPage() {
   }, []);
 
   useEffect(() => {
-    // Auto-search when query changes (with debounce)
+    // Auto-search only local foods when query changes (with debounce)
     const timer = setTimeout(() => {
       if (query.length >= 2 && activeTab === 'all') {
-        handleSearch();
+        handleLocalSearch();
       } else if (query.length === 0) {
         setResults([]);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, source]);
+  }, [query]);
+
+  async function handleLocalSearch() {
+    if (!query.trim()) return;
+
+    try {
+      // If query is a barcode, search by source_key
+      if (isBarcode(query)) {
+        const barcodeFood = await getFoodBySourceKey('OFF', query.trim());
+        if (barcodeFood) {
+          const fullFood = await getFoodWithNutrients(barcodeFood.id);
+          setResults(fullFood ? [fullFood] : []);
+          return;
+        }
+      }
+
+      // Otherwise do normal text search
+      const localResults = await searchFoods(query);
+      setResults(localResults);
+    } catch (error) {
+      console.error('Local search error:', error);
+    }
+  }
 
   async function loadFavorites() {
     const favs = await getFavoriteFoods();
@@ -62,27 +87,66 @@ export function SearchPage() {
     setRecentFoods(foods.filter((f) => f !== null) as FoodWithNutrients[]);
   }
 
-  async function handleSearch() {
+  async function handleRemoteSearch() {
     if (!query.trim()) return;
 
     setLoading(true);
 
     try {
-      let searchResults: FoodWithNutrients[] = [];
+      // If query is a barcode, do barcode lookup
+      if (isBarcode(query)) {
+        const trimmedBarcode = query.trim();
 
-      if (source === 'local') {
-        searchResults = await searchFoods(query);
-      } else if (source === 'off') {
-        searchResults = await searchOFF(query);
-      } else if (source === 'fdc') {
-        searchResults = await searchFDC(query);
+        // Check local cache first
+        const cachedFood = await getFoodBySourceKey('OFF', trimmedBarcode);
+        if (cachedFood) {
+          const fullFood = await getFoodWithNutrients(cachedFood.id);
+          setResults(fullFood ? [fullFood] : []);
+          setLoading(false);
+          return;
+        }
+
+        // Lookup from Open Food Facts
+        const barcodeResult = await lookupBarcode(trimmedBarcode);
+        if (barcodeResult) {
+          setResults([barcodeResult]);
+        } else {
+          setResults([]);
+        }
+        setLoading(false);
+        return;
       }
 
-      setResults(searchResults);
+      // Text search: search all sources in parallel
+      const [localResults, offResults, fdcResults] = await Promise.all([
+        searchFoods(query).catch((err) => {
+          console.error('Local search error:', err);
+          return [];
+        }),
+        searchOFF(query).catch((err) => {
+          console.error('OFF search error:', err);
+          return [];
+        }),
+        searchFDC(query).catch((err) => {
+          console.error('FDC search error:', err);
+          return [];
+        }),
+      ]);
+
+      // Combine all results
+      const combinedResults = [...localResults, ...offResults, ...fdcResults];
+
+      setResults(combinedResults);
     } catch (error) {
       console.error('Search error:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleKeyPress(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      handleRemoteSearch();
     }
   }
 
@@ -169,12 +233,6 @@ export function SearchPage() {
     { id: 'recent' as Tab, label: 'Recent', icon: '🕒' },
   ];
 
-  const sources = [
-    { id: 'local' as Source, label: 'My Foods' },
-    { id: 'off' as Source, label: 'Open Food Facts' },
-    { id: 'fdc' as Source, label: 'USDA FDC' },
-  ];
-
   const displayResults =
     activeTab === 'all'
       ? results
@@ -210,32 +268,30 @@ export function SearchPage() {
           {activeTab === 'all' && (
             <>
               {/* Search input */}
-              <div className="mb-3">
+              <div className="mb-3 flex gap-2">
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search foods..."
-                  className="w-full px-4 py-3 border rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onKeyPress={handleKeyPress}
+                  placeholder="Search foods (press Enter for online search)..."
+                  className="flex-1 px-4 py-3 border rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+                <button
+                  onClick={handleRemoteSearch}
+                  disabled={query.length < 2}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Search Online
+                </button>
               </div>
 
-              {/* Source selector */}
-              <div className="flex gap-2">
-                {sources.map((src) => (
-                  <button
-                    key={src.id}
-                    onClick={() => setSource(src.id)}
-                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${
-                      source === src.id
-                        ? 'bg-blue-100 text-blue-800 border-2 border-blue-600'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {src.label}
-                  </button>
-                ))}
-              </div>
+              {/* Info text */}
+              <p className="text-sm text-gray-600">
+                {isBarcode(query)
+                  ? '🔢 Barcode detected! Auto-searching cached foods. Click "Search Online" to lookup from Open Food Facts.'
+                  : 'Auto-searches your saved foods. Click "Search Online" or press Enter to search Open Food Facts and USDA databases.'}
+              </p>
             </>
           )}
         </div>

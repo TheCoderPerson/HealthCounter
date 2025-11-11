@@ -8,7 +8,7 @@ export function Navigation() {
     { path: '/search', label: 'Search', icon: '🔍' },
     { path: '/scan', label: 'Scan', icon: '📷' },
     { path: '/recipes', label: 'Recipes', icon: '📖' },
-    { path: '/manual', label: 'Manual', icon: '✏️' },
+    { path: '/settings', label: 'Settings', icon: '⚙️' },
   ];
 
   return (
