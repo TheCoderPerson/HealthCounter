@@ -156,15 +156,18 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
 // Search products by text
 export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutrients[]> {
   try {
-    // Use the v2 search API
-    // Request more results since we'll filter on client side
+    // Use the v1 search API because v2 doesn't support full text search
+    // v1 uses /cgi/search.pl with search_terms parameter
     const params = new URLSearchParams({
-      q: query, // v2 API uses 'q' instead of 'search_terms'
+      search_terms: query,
+      search_simple: '1',
+      action: 'process',
+      json: '1',
       page_size: (limit * 3).toString(), // Request 3x more to account for filtering
       fields: 'product_name,brands,code,nutriments,serving_size',
     });
 
-    const response = await fetch(`${OFF_API_BASE}/search?${params}`);
+    const response = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?${params}`);
 
     if (!response.ok) {
       console.error('[OFF] Search error:', response.status, response.statusText);
