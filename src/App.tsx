@@ -9,6 +9,7 @@ import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { ManualFoodPage } from './pages/ManualFoodPage';
 import { FoodDetailPage } from './pages/FoodDetailPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function App() {
   useEffect(() => {
@@ -26,6 +27,7 @@ function App() {
           <Route path="/recipes/:id" element={<RecipeDetailPage />} />
           <Route path="/manual" element={<ManualFoodPage />} />
           <Route path="/food/:id" element={<FoodDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
       <Navigation />

@@ -1,11 +1,11 @@
 import type { FoodWithNutrients, NutrientsPer100g } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { getFDCApiKey } from '../utils/settings';
 
 // USDA FoodData Central API
 // Note: Requires an API key from https://fdc.nal.usda.gov/api-key-signup.html
 // IMPORTANT: DEMO_KEY has very strict rate limits (429 errors). Get a free API key at the URL above.
 const FDC_API_BASE = 'https://api.nal.usda.gov/fdc/v1';
-const FDC_API_KEY = 'DEMO_KEY'; // Replace with actual API key for production use
 
 // FDC nutrient IDs (standardized)
 const NUTRIENT_IDS = {
@@ -114,7 +114,7 @@ export async function searchFDC(
     const params = new URLSearchParams({
       query,
       pageSize: limit.toString(),
-      api_key: FDC_API_KEY,
+      api_key: getFDCApiKey(), // Get API key from settings
       dataType: 'Foundation,SR Legacy', // Prefer these for full nutrient data
     });
 
@@ -165,7 +165,7 @@ export async function searchFDC(
 export async function getFDCFood(fdcId: string): Promise<FoodWithNutrients | null> {
   try {
     const params = new URLSearchParams({
-      api_key: FDC_API_KEY,
+      api_key: getFDCApiKey(), // Get API key from settings
     });
 
     const response = await fetch(`${FDC_API_BASE}/food/${fdcId}?${params}`, {

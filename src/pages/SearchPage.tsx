@@ -3,9 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { searchFoods, createFood, getFoodWithNutrients, getFoodBySourceKey } from '../db/foodRepository';
 import { getRecentFoods } from '../db/entryRepository';
 import { getFavoriteFoods, addFavorite, removeFavoriteByFoodId, isFavorite } from '../db/favoritesRepository';
-import { searchOFF } from '../api/openFoodFacts';
+import { searchOFF, lookupBarcode } from '../api/openFoodFacts';
 import { searchFDC } from '../api/foodDataCentral';
 import type { FoodWithNutrients } from '../types';
+
+// Helper to detect if query is a barcode (numeric)
+function isBarcode(query: string): boolean {
+  return /^\d+$/.test(query.trim()) && query.trim().length >= 8;
+}
 
 type Tab = 'all' | 'favorites' | 'recent';
 
@@ -43,6 +48,17 @@ export function SearchPage() {
     if (!query.trim()) return;
 
     try {
+      // If query is a barcode, search by source_key
+      if (isBarcode(query)) {
+        const barcodeFood = await getFoodBySourceKey('OFF', query.trim());
+        if (barcodeFood) {
+          const fullFood = await getFoodWithNutrients(barcodeFood.id);
+          setResults(fullFood ? [fullFood] : []);
+          return;
+        }
+      }
+
+      // Otherwise do normal text search
       const localResults = await searchFoods(query);
       setResults(localResults);
     } catch (error) {
@@ -77,7 +93,31 @@ export function SearchPage() {
     setLoading(true);
 
     try {
-      // Search all sources in parallel
+      // If query is a barcode, do barcode lookup
+      if (isBarcode(query)) {
+        const trimmedBarcode = query.trim();
+
+        // Check local cache first
+        const cachedFood = await getFoodBySourceKey('OFF', trimmedBarcode);
+        if (cachedFood) {
+          const fullFood = await getFoodWithNutrients(cachedFood.id);
+          setResults(fullFood ? [fullFood] : []);
+          setLoading(false);
+          return;
+        }
+
+        // Lookup from Open Food Facts
+        const barcodeResult = await lookupBarcode(trimmedBarcode);
+        if (barcodeResult) {
+          setResults([barcodeResult]);
+        } else {
+          setResults([]);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Text search: search all sources in parallel
       const [localResults, offResults, fdcResults] = await Promise.all([
         searchFoods(query).catch((err) => {
           console.error('Local search error:', err);
@@ -248,7 +288,9 @@ export function SearchPage() {
 
               {/* Info text */}
               <p className="text-sm text-gray-600">
-                Auto-searches your saved foods. Click "Search Online" or press Enter to search Open Food Facts and USDA databases.
+                {isBarcode(query)
+                  ? '🔢 Barcode detected! Auto-searching cached foods. Click "Search Online" to lookup from Open Food Facts.'
+                  : 'Auto-searches your saved foods. Click "Search Online" or press Enter to search Open Food Facts and USDA databases.'}
               </p>
             </>
           )}
