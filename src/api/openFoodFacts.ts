@@ -110,7 +110,11 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
   const normalizedBarcode = normalizeBarcode(barcode);
 
   try {
-    const response = await fetch(`${OFF_API_BASE}/product/${normalizedBarcode}.json`);
+    const response = await fetch(`${OFF_API_BASE}/product/${normalizedBarcode}.json`, {
+      headers: {
+        'User-Agent': 'HealthCounter/1.0 (https://github.com/TheCoderPerson/HealthCounter)',
+      },
+    });
 
     if (!response.ok) {
       console.error('OFF API error:', response.status);
@@ -156,14 +160,18 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
 // Search products by text
 export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutrients[]> {
   try {
+    // Use the v2 search API
     const params = new URLSearchParams({
-      search_terms: query,
+      q: query, // v2 API uses 'q' instead of 'search_terms'
       page_size: limit.toString(),
-      json: '1',
       fields: 'product_name,brands,code,nutriments,serving_size',
     });
 
-    const response = await fetch(`${OFF_API_BASE}/../cgi/search.pl?${params}`);
+    const response = await fetch(`${OFF_API_BASE}/search?${params}`, {
+      headers: {
+        'User-Agent': 'HealthCounter/1.0 (https://github.com/TheCoderPerson/HealthCounter)',
+      },
+    });
 
     if (!response.ok) {
       console.error('OFF search error:', response.status);
