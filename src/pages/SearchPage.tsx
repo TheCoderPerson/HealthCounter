@@ -8,7 +8,6 @@ import { searchFDC } from '../api/foodDataCentral';
 import type { FoodWithNutrients } from '../types';
 
 type Tab = 'all' | 'favorites' | 'recent';
-type Source = 'local' | 'off' | 'fdc';
 
 export function SearchPage() {
   const navigate = useNavigate();
@@ -16,7 +15,6 @@ export function SearchPage() {
   const mealParam = searchParams.get('meal');
   const [activeTab, setActiveTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
-  const [source, setSource] = useState<Source>('off'); // Default to Open Food Facts for better UX
   const [results, setResults] = useState<FoodWithNutrients[]>([]);
   const [favorites, setFavorites] = useState<FoodWithNutrients[]>([]);
   const [recentFoods, setRecentFoods] = useState<FoodWithNutrients[]>([]);
@@ -39,7 +37,7 @@ export function SearchPage() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, source]);
+  }, [query]);
 
   async function loadFavorites() {
     const favs = await getFavoriteFoods();
@@ -68,17 +66,26 @@ export function SearchPage() {
     setLoading(true);
 
     try {
-      let searchResults: FoodWithNutrients[] = [];
+      // Search all sources in parallel
+      const [localResults, offResults, fdcResults] = await Promise.all([
+        searchFoods(query).catch((err) => {
+          console.error('Local search error:', err);
+          return [];
+        }),
+        searchOFF(query).catch((err) => {
+          console.error('OFF search error:', err);
+          return [];
+        }),
+        searchFDC(query).catch((err) => {
+          console.error('FDC search error:', err);
+          return [];
+        }),
+      ]);
 
-      if (source === 'local') {
-        searchResults = await searchFoods(query);
-      } else if (source === 'off') {
-        searchResults = await searchOFF(query);
-      } else if (source === 'fdc') {
-        searchResults = await searchFDC(query);
-      }
+      // Combine all results
+      const combinedResults = [...localResults, ...offResults, ...fdcResults];
 
-      setResults(searchResults);
+      setResults(combinedResults);
     } catch (error) {
       console.error('Search error:', error);
     } finally {
@@ -169,12 +176,6 @@ export function SearchPage() {
     { id: 'recent' as Tab, label: 'Recent', icon: '🕒' },
   ];
 
-  const sources = [
-    { id: 'local' as Source, label: 'My Foods' },
-    { id: 'off' as Source, label: 'Open Food Facts' },
-    { id: 'fdc' as Source, label: 'USDA FDC' },
-  ];
-
   const displayResults =
     activeTab === 'all'
       ? results
@@ -215,27 +216,15 @@ export function SearchPage() {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search foods..."
+                  placeholder="Search all databases..."
                   className="w-full px-4 py-3 border rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
-              {/* Source selector */}
-              <div className="flex gap-2">
-                {sources.map((src) => (
-                  <button
-                    key={src.id}
-                    onClick={() => setSource(src.id)}
-                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${
-                      source === src.id
-                        ? 'bg-blue-100 text-blue-800 border-2 border-blue-600'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {src.label}
-                  </button>
-                ))}
-              </div>
+              {/* Info text */}
+              <p className="text-sm text-gray-600">
+                Searching across My Foods, Open Food Facts, and USDA databases
+              </p>
             </>
           )}
         </div>
