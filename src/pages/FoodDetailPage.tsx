@@ -30,9 +30,9 @@ export function FoodDetailPage() {
     setFood(foodData);
     setLoading(false);
 
-    // Set default amount to serving if available
+    // Set default amount to serving size if available
     if (foodData?.grams_per_serving) {
-      setAmount({ value: 1, unit: 'serving' });
+      setAmount({ value: foodData.grams_per_serving, unit: 'g' });
     }
   }
 
