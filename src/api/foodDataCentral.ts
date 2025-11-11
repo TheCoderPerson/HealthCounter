@@ -111,28 +111,44 @@ export async function searchFDC(
   limit = 20
 ): Promise<FoodWithNutrients[]> {
   try {
+    const apiKey = getFDCApiKey();
+    console.log('[FDC] Searching with query:', query, '| API Key:', apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'Custom Key (length: ' + apiKey.length + ')');
+
     const params = new URLSearchParams({
       query,
       pageSize: limit.toString(),
-      api_key: getFDCApiKey(), // Get API key from settings
+      api_key: apiKey, // Get API key from settings
       dataType: 'Foundation,SR Legacy', // Prefer these for full nutrient data
     });
 
-    const response = await fetch(`${FDC_API_BASE}/foods/search?${params}`, {
-      headers: {
-        'User-Agent': 'HealthCounter/1.0 (https://github.com/TheCoderPerson/HealthCounter)',
-      },
-    });
+    const url = `${FDC_API_BASE}/foods/search?${params}`;
+    console.log('[FDC] Request URL:', url.replace(/api_key=[^&]+/, 'api_key=***'));
+
+    const response = await fetch(url);
+
+    console.log('[FDC] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
-      console.error('FDC API error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('[FDC] API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
       if (response.status === 429) {
-        console.error('FDC rate limit exceeded. Consider getting a free API key at https://fdc.nal.usda.gov/api-key-signup.html');
+        console.error('[FDC] Rate limit exceeded. Your API key has hit the rate limit. Consider waiting or getting a new API key at https://fdc.nal.usda.gov/api-key-signup.html');
+      } else if (response.status === 403) {
+        console.error('[FDC] Access forbidden. Your API key may be invalid. Please check your API key in Settings.');
+      } else if (response.status === 400) {
+        console.error('[FDC] Bad request. The API key or request parameters may be invalid.');
       }
       return [];
     }
 
     const data: FDCSearchResult = await response.json();
+    console.log('[FDC] Found', data.foods?.length || 0, 'results');
 
     return data.foods.map((fdcFood) => {
       const nutrients = mapFDCNutrients(fdcFood.foodNutrients);
@@ -156,7 +172,10 @@ export async function searchFDC(
       return food;
     });
   } catch (error) {
-    console.error('Error searching FDC:', error);
+    console.error('[FDC] Error searching FDC:', error);
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('[FDC] Network error - this could be a CORS issue, network connectivity problem, or the API might be unreachable from your device');
+    }
     return [];
   }
 }
@@ -164,20 +183,30 @@ export async function searchFDC(
 // Get specific food by FDC ID
 export async function getFDCFood(fdcId: string): Promise<FoodWithNutrients | null> {
   try {
+    const apiKey = getFDCApiKey();
+    console.log('[FDC] Fetching food ID:', fdcId);
+
     const params = new URLSearchParams({
-      api_key: getFDCApiKey(), // Get API key from settings
+      api_key: apiKey, // Get API key from settings
     });
 
-    const response = await fetch(`${FDC_API_BASE}/food/${fdcId}?${params}`, {
-      headers: {
-        'User-Agent': 'HealthCounter/1.0 (https://github.com/TheCoderPerson/HealthCounter)',
-      },
-    });
+    const url = `${FDC_API_BASE}/food/${fdcId}?${params}`;
+    const response = await fetch(url);
+
+    console.log('[FDC] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
-      console.error('FDC API error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('[FDC] API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText
+      });
+
       if (response.status === 429) {
-        console.error('FDC rate limit exceeded. Consider getting a free API key at https://fdc.nal.usda.gov/api-key-signup.html');
+        console.error('[FDC] Rate limit exceeded. Consider getting a free API key at https://fdc.nal.usda.gov/api-key-signup.html');
+      } else if (response.status === 403) {
+        console.error('[FDC] Access forbidden. Your API key may be invalid.');
       }
       return null;
     }
@@ -203,7 +232,10 @@ export async function getFDCFood(fdcId: string): Promise<FoodWithNutrients | nul
 
     return food;
   } catch (error) {
-    console.error('Error fetching FDC food:', error);
+    console.error('[FDC] Error fetching FDC food:', error);
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('[FDC] Network error - this could be a CORS issue, network connectivity problem, or the API might be unreachable from your device');
+    }
     return null;
   }
 }

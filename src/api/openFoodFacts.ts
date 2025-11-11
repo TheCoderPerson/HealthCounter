@@ -110,14 +110,10 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
   const normalizedBarcode = normalizeBarcode(barcode);
 
   try {
-    const response = await fetch(`${OFF_API_BASE}/product/${normalizedBarcode}.json`, {
-      headers: {
-        'User-Agent': 'HealthCounter/1.0 (https://github.com/TheCoderPerson/HealthCounter)',
-      },
-    });
+    const response = await fetch(`${OFF_API_BASE}/product/${normalizedBarcode}.json`);
 
     if (!response.ok) {
-      console.error('OFF API error:', response.status);
+      console.error('[OFF] Barcode lookup error:', response.status, response.statusText);
       return null;
     }
 
@@ -161,28 +157,39 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
 export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutrients[]> {
   try {
     // Use the v2 search API
+    // Request more results since we'll filter on client side
     const params = new URLSearchParams({
       q: query, // v2 API uses 'q' instead of 'search_terms'
-      page_size: limit.toString(),
+      page_size: (limit * 3).toString(), // Request 3x more to account for filtering
       fields: 'product_name,brands,code,nutriments,serving_size',
     });
 
-    const response = await fetch(`${OFF_API_BASE}/search?${params}`, {
-      headers: {
-        'User-Agent': 'HealthCounter/1.0 (https://github.com/TheCoderPerson/HealthCounter)',
-      },
-    });
+    const response = await fetch(`${OFF_API_BASE}/search?${params}`);
 
     if (!response.ok) {
-      console.error('OFF search error:', response.status);
+      console.error('[OFF] Search error:', response.status, response.statusText);
       return [];
     }
 
     const data = await response.json();
     const products = data.products || [];
 
+    // Normalize search query for comparison
+    const normalizedQuery = query.toLowerCase().trim();
+
     return products
-      .filter((p: OFFProduct) => p.product_name)
+      .filter((p: OFFProduct) => {
+        // Only include products with a name
+        if (!p.product_name) return false;
+
+        // Filter to only products where name or brand contains the search query
+        // This prevents irrelevant results from ingredient/category matches
+        const nameMatch = p.product_name.toLowerCase().includes(normalizedQuery);
+        const brandMatch = p.brands?.toLowerCase().includes(normalizedQuery);
+
+        return nameMatch || brandMatch;
+      })
+      .slice(0, limit) // Limit to requested number after filtering
       .map((product: OFFProduct & { code?: string }) => {
         const nutrients = product.nutriments ? mapOFFNutrients(product.nutriments) : {};
 
