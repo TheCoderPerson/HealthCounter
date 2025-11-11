@@ -75,7 +75,10 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     if (readerRef.current) {
       try {
         // TypeScript doesn't know about stopContinuousDecode, but it exists on the reader
-        (readerRef.current as any).stopContinuousDecode();
+        const reader = readerRef.current as any;
+        if (typeof reader.stopContinuousDecode === 'function') {
+          reader.stopContinuousDecode();
+        }
       } catch (err) {
         console.error('Error stopping scanner:', err);
       }

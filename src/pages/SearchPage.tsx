@@ -27,10 +27,10 @@ export function SearchPage() {
   }, []);
 
   useEffect(() => {
-    // Auto-search when query changes (with debounce)
+    // Auto-search only local foods when query changes (with debounce)
     const timer = setTimeout(() => {
       if (query.length >= 2 && activeTab === 'all') {
-        handleSearch();
+        handleLocalSearch();
       } else if (query.length === 0) {
         setResults([]);
       }
@@ -38,6 +38,17 @@ export function SearchPage() {
 
     return () => clearTimeout(timer);
   }, [query]);
+
+  async function handleLocalSearch() {
+    if (!query.trim()) return;
+
+    try {
+      const localResults = await searchFoods(query);
+      setResults(localResults);
+    } catch (error) {
+      console.error('Local search error:', error);
+    }
+  }
 
   async function loadFavorites() {
     const favs = await getFavoriteFoods();
@@ -60,7 +71,7 @@ export function SearchPage() {
     setRecentFoods(foods.filter((f) => f !== null) as FoodWithNutrients[]);
   }
 
-  async function handleSearch() {
+  async function handleRemoteSearch() {
     if (!query.trim()) return;
 
     setLoading(true);
@@ -90,6 +101,12 @@ export function SearchPage() {
       console.error('Search error:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleKeyPress(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      handleRemoteSearch();
     }
   }
 
@@ -211,19 +228,27 @@ export function SearchPage() {
           {activeTab === 'all' && (
             <>
               {/* Search input */}
-              <div className="mb-3">
+              <div className="mb-3 flex gap-2">
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search all databases..."
-                  className="w-full px-4 py-3 border rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  onKeyPress={handleKeyPress}
+                  placeholder="Search foods (press Enter for online search)..."
+                  className="flex-1 px-4 py-3 border rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+                <button
+                  onClick={handleRemoteSearch}
+                  disabled={query.length < 2}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Search Online
+                </button>
               </div>
 
               {/* Info text */}
               <p className="text-sm text-gray-600">
-                Searching across My Foods, Open Food Facts, and USDA databases
+                Auto-searches your saved foods. Click "Search Online" or press Enter to search Open Food Facts and USDA databases.
               </p>
             </>
           )}
