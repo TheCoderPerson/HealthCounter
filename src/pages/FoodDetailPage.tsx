@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getFoodWithNutrients } from '../db/foodRepository';
 import { createEntry } from '../db/entryRepository';
-import { toGrams, getAvailableUnits, formatUnit } from '../domain/units';
+import { toGrams, gramsTo, getAvailableUnits, formatUnit } from '../domain/units';
 import { calculateNutrients, formatNutrientValue } from '../domain/nutrition';
 import type { FoodWithNutrients, MealType, UnitType, Amount } from '../types';
 import { NUTRIENT_LABELS, NUTRIENT_UNITS } from '../types/nutrients';
@@ -45,6 +45,23 @@ export function FoodDetailPage() {
       navigate('/');
     } catch (error) {
       alert((error as Error).message);
+    }
+  };
+
+  const handleUnitChange = (newUnit: UnitType) => {
+    if (!food) return;
+
+    try {
+      // Convert current amount to grams
+      const grams = toGrams(amount, food);
+      // Convert grams to new unit
+      const newValue = gramsTo(grams, newUnit, food);
+      // Update amount with converted value
+      setAmount({ value: parseFloat(newValue.toFixed(2)), unit: newUnit });
+    } catch (error) {
+      // If conversion fails (e.g., no serving size defined), just change unit
+      console.warn('Unit conversion error:', error);
+      setAmount({ ...amount, unit: newUnit });
     }
   };
 
@@ -163,7 +180,7 @@ export function FoodDetailPage() {
             />
             <select
               value={amount.unit}
-              onChange={(e) => setAmount({ ...amount, unit: e.target.value as UnitType })}
+              onChange={(e) => handleUnitChange(e.target.value as UnitType)}
               className="px-3 py-2 border rounded-lg"
             >
               {availableUnits.map((unit) => (
