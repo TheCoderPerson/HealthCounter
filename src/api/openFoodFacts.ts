@@ -156,15 +156,22 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
 // Search products by text
 export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutrients[]> {
   try {
+    console.log('[OFF] Searching with query:', query);
+
     // Use the v2 search API
-    // Request more results since we'll filter on client side
+    // Trust OFF's relevance ranking algorithm
     const params = new URLSearchParams({
       q: query, // v2 API uses 'q' instead of 'search_terms'
-      page_size: (limit * 3).toString(), // Request 3x more to account for filtering
+      page_size: limit.toString(),
       fields: 'product_name,brands,code,nutriments,serving_size',
     });
 
-    const response = await fetch(`${OFF_API_BASE}/search?${params}`);
+    const url = `${OFF_API_BASE}/search?${params}`;
+    console.log('[OFF] Request URL:', url);
+
+    const response = await fetch(url);
+
+    console.log('[OFF] Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       console.error('[OFF] Search error:', response.status, response.statusText);
@@ -174,22 +181,34 @@ export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutr
     const data = await response.json();
     const products = data.products || [];
 
-    // Normalize search query for comparison
-    const normalizedQuery = query.toLowerCase().trim();
+    console.log('[OFF] API returned', products.length, 'products');
 
-    return products
-      .filter((p: OFFProduct) => {
-        // Only include products with a name
-        if (!p.product_name) return false;
+    // Log first few product names to see what we got
+    if (products.length > 0) {
+      console.log('[OFF] Sample products:', products.slice(0, 5).map((p: OFFProduct) => ({
+        name: p.product_name,
+        brand: p.brands
+      })));
+    }
 
-        // Filter to only products where name or brand contains the search query
-        // This prevents irrelevant results from ingredient/category matches
-        const nameMatch = p.product_name.toLowerCase().includes(normalizedQuery);
-        const brandMatch = p.brands?.toLowerCase().includes(normalizedQuery);
+    // Filter out products without names, but trust OFF's relevance ranking
+    // OFF's search algorithm already ranks results by relevance
+    const filtered = products.filter((p: OFFProduct) => {
+      // Only filter out products with no name at all
+      return p.product_name && p.product_name.trim().length > 0;
+    });
 
-        return nameMatch || brandMatch;
-      })
-      .slice(0, limit) // Limit to requested number after filtering
+    console.log('[OFF] After filtering out unnamed products:', filtered.length, 'products remaining');
+
+    if (filtered.length > 0) {
+      console.log('[OFF] Top products:', filtered.slice(0, 5).map((p: OFFProduct) => ({
+        name: p.product_name,
+        brand: p.brands
+      })));
+    }
+
+    return filtered
+      .slice(0, limit) // Limit to requested number
       .map((product: OFFProduct & { code?: string }) => {
         const nutrients = product.nutriments ? mapOFFNutrients(product.nutriments) : {};
 
@@ -210,7 +229,10 @@ export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutr
         return food;
       });
   } catch (error) {
-    console.error('Error searching OFF:', error);
+    console.error('[OFF] Error searching OFF:', error);
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('[OFF] Network error - this could be a CORS issue or network connectivity problem');
+    }
     return [];
   }
 }
