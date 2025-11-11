@@ -68,6 +68,16 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   };
 
   const stopScanning = () => {
+    // Stop the ZXing reader continuous decode loop
+    if (readerRef.current) {
+      try {
+        // TypeScript doesn't know about stopContinuousDecode, but it exists on the reader
+        (readerRef.current as any).stopContinuousDecode();
+      } catch (err) {
+        console.error('Error stopping scanner:', err);
+      }
+    }
+
     // Stop the video stream
     if (videoRef.current?.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
