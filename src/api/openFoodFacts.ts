@@ -156,14 +156,20 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
 // Search products by text
 export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutrients[]> {
   try {
-    // Use the search-a-licious API which has better full text search support
+    // Use the v1 API which supports full text search and has CORS enabled
     const params = new URLSearchParams({
-      q: query,
+      search_terms: query,
+      search_simple: '1',
+      action: 'process',
+      json: '1',
       page_size: limit.toString(),
       fields: 'product_name,brands,code,nutriments,serving_size',
     });
 
-    const response = await fetch(`https://search.openfoodfacts.org/search?${params}`);
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?${params}`;
+    console.log('[OFF DEBUG] Fetching:', url);
+
+    const response = await fetch(url);
 
     if (!response.ok) {
       console.error('[OFF] Search error:', response.status, response.statusText);
@@ -175,28 +181,41 @@ export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutr
       count: data.count,
       page: data.page,
       page_size: data.page_size,
-      hits_length: data.hits?.length || 0,
-      first_hit: data.hits?.[0],
+      products_length: data.products?.length || 0,
+      first_product_name: data.products?.[0]?.product_name,
+      first_product_brands: data.products?.[0]?.brands,
     });
 
-    // search-a-licious returns results in "hits" array, not "products"
-    const hits = data.hits || [];
+    // v1 API returns results in "products" array
+    const products = data.products || [];
 
-    // No need for strict filtering since search-a-licious has better relevance
-    // Just filter out products without names
-    return hits
-      .filter((hit: any) => hit.product_name)
-      .map((hit: any) => {
-        const nutrients = hit.nutriments ? mapOFFNutrients(hit.nutriments) : {};
+    if (products.length === 0) {
+      console.log('[OFF DEBUG] No products returned from API');
+      return [];
+    }
+
+    console.log('[OFF DEBUG] Processing', products.length, 'products');
+
+    // Map products to our format
+    return products
+      .filter((product: OFFProduct) => {
+        if (!product.product_name) {
+          console.log('[OFF DEBUG] Skipping product without name');
+          return false;
+        }
+        return true;
+      })
+      .map((product: OFFProduct & { code?: string }) => {
+        const nutrients = product.nutriments ? mapOFFNutrients(product.nutriments) : {};
 
         const food: FoodWithNutrients = {
           id: uuidv4(),
-          name: hit.product_name || 'Unknown Product',
-          brand: hit.brands || undefined,
+          name: product.product_name || 'Unknown Product',
+          brand: product.brands || undefined,
           source: 'OFF',
-          source_key: hit.code,
+          source_key: product.code,
           state: null,
-          grams_per_serving: parseServingSize(hit.serving_size),
+          grams_per_serving: parseServingSize(product.serving_size),
           confidence: 'exact_db',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
