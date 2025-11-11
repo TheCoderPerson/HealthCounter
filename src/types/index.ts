@@ -86,7 +86,7 @@ export interface Settings {
 }
 
 // Unit types for input
-export type UnitType = 'g' | 'oz' | 'ml' | 'serving' | 'piece';
+export type UnitType = 'g' | 'oz' | 'ml' | 'cup' | 'tbsp' | 'tsp' | 'serving' | 'piece';
 
 // Amount input
 export interface Amount {

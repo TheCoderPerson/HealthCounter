@@ -20,9 +20,25 @@ export function mlToGrams(ml: number, densityGPerMl: number = 1.0): number {
   return ml * densityGPerMl;
 }
 
+// Convert cups to mL
+export function cupsToMl(cups: number): number {
+  return cups * 240; // 1 cup = 240 mL
+}
+
+// Convert tablespoons to mL
+export function tbspToMl(tbsp: number): number {
+  return tbsp * 15; // 1 tablespoon = 15 mL
+}
+
+// Convert teaspoons to mL
+export function tspToMl(tsp: number): number {
+  return tsp * 5; // 1 teaspoon = 5 mL
+}
+
 // Convert any amount to grams
 export function toGrams(amount: Amount, food?: Food): number {
   const { value, unit } = amount;
+  const density = food?.density_g_per_ml ?? 1.0; // Default to water density
 
   switch (unit) {
     case 'g':
@@ -32,8 +48,16 @@ export function toGrams(amount: Amount, food?: Food): number {
       return ozToGrams(value);
 
     case 'ml':
-      const density = food?.density_g_per_ml ?? 1.0;
       return mlToGrams(value, density);
+
+    case 'cup':
+      return mlToGrams(cupsToMl(value), density);
+
+    case 'tbsp':
+      return mlToGrams(tbspToMl(value), density);
+
+    case 'tsp':
+      return mlToGrams(tspToMl(value), density);
 
     case 'serving':
       if (!food?.grams_per_serving) {
@@ -54,6 +78,8 @@ export function toGrams(amount: Amount, food?: Food): number {
 
 // Convert grams to other units
 export function gramsTo(grams: number, unit: UnitType, food?: Food): number {
+  const density = food?.density_g_per_ml ?? 1.0; // Default to water density
+
   switch (unit) {
     case 'g':
       return grams;
@@ -62,8 +88,16 @@ export function gramsTo(grams: number, unit: UnitType, food?: Food): number {
       return grams / 28.3495;
 
     case 'ml':
-      const density = food?.density_g_per_ml ?? 1.0;
       return grams / density;
+
+    case 'cup':
+      return (grams / density) / 240; // Convert to mL first, then to cups
+
+    case 'tbsp':
+      return (grams / density) / 15; // Convert to mL first, then to tablespoons
+
+    case 'tsp':
+      return (grams / density) / 5; // Convert to mL first, then to teaspoons
 
     case 'serving':
       if (!food?.grams_per_serving) {
@@ -86,9 +120,8 @@ export function gramsTo(grams: number, unit: UnitType, food?: Food): number {
 export function getAvailableUnits(food: Food): UnitType[] {
   const units: UnitType[] = ['g', 'oz'];
 
-  if (food.density_g_per_ml !== undefined) {
-    units.push('ml');
-  }
+  // Always add volume units (they use density, defaulting to water if not specified)
+  units.push('ml', 'cup', 'tbsp', 'tsp');
 
   if (food.grams_per_serving) {
     units.push('serving');
@@ -112,6 +145,12 @@ export function formatUnit(unit: UnitType, value: number = 1): string {
       return 'oz';
     case 'ml':
       return 'mL';
+    case 'cup':
+      return isPlural ? 'cups' : 'cup';
+    case 'tbsp':
+      return 'tbsp';
+    case 'tsp':
+      return 'tsp';
     case 'serving':
       return isPlural ? 'servings' : 'serving';
     case 'piece':
