@@ -156,15 +156,14 @@ export async function lookupBarcode(barcode: string): Promise<FoodWithNutrients 
 // Search products by text
 export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutrients[]> {
   try {
-    // Use the v2 search API
-    // Request more results since we'll filter on client side
+    // Use the search-a-licious API which has better full text search support
     const params = new URLSearchParams({
-      q: query, // v2 API uses 'q' instead of 'search_terms'
-      page_size: (limit * 3).toString(), // Request 3x more to account for filtering
+      q: query,
+      page_size: limit.toString(),
       fields: 'product_name,brands,code,nutriments,serving_size',
     });
 
-    const response = await fetch(`${OFF_API_BASE}/search?${params}`);
+    const response = await fetch(`https://search.openfoodfacts.org/search?${params}`);
 
     if (!response.ok) {
       console.error('[OFF] Search error:', response.status, response.statusText);
@@ -172,35 +171,32 @@ export async function searchOFF(query: string, limit = 20): Promise<FoodWithNutr
     }
 
     const data = await response.json();
-    const products = data.products || [];
+    console.log('[OFF DEBUG] API Response:', {
+      count: data.count,
+      page: data.page,
+      page_size: data.page_size,
+      hits_length: data.hits?.length || 0,
+      first_hit: data.hits?.[0],
+    });
 
-    // Normalize search query for comparison
-    const normalizedQuery = query.toLowerCase().trim();
+    // search-a-licious returns results in "hits" array, not "products"
+    const hits = data.hits || [];
 
-    return products
-      .filter((p: OFFProduct) => {
-        // Only include products with a name
-        if (!p.product_name) return false;
-
-        // Filter to only products where name or brand contains the search query
-        // This prevents irrelevant results from ingredient/category matches
-        const nameMatch = p.product_name.toLowerCase().includes(normalizedQuery);
-        const brandMatch = p.brands?.toLowerCase().includes(normalizedQuery);
-
-        return nameMatch || brandMatch;
-      })
-      .slice(0, limit) // Limit to requested number after filtering
-      .map((product: OFFProduct & { code?: string }) => {
-        const nutrients = product.nutriments ? mapOFFNutrients(product.nutriments) : {};
+    // No need for strict filtering since search-a-licious has better relevance
+    // Just filter out products without names
+    return hits
+      .filter((hit: any) => hit.product_name)
+      .map((hit: any) => {
+        const nutrients = hit.nutriments ? mapOFFNutrients(hit.nutriments) : {};
 
         const food: FoodWithNutrients = {
           id: uuidv4(),
-          name: product.product_name || 'Unknown Product',
-          brand: product.brands || undefined,
+          name: hit.product_name || 'Unknown Product',
+          brand: hit.brands || undefined,
           source: 'OFF',
-          source_key: product.code,
+          source_key: hit.code,
           state: null,
-          grams_per_serving: parseServingSize(product.serving_size),
+          grams_per_serving: parseServingSize(hit.serving_size),
           confidence: 'exact_db',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
